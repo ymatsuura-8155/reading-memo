@@ -6,19 +6,15 @@
   <title>Google Drive HTML 読書メモ Viewer</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Google API & Google Identity Services SDK の追加 -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://apis.google.com/js/api.js" async defer></script>
+
   <style>
-    /* スプリットバー＆レイアウトスタイル */
-    ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #cbd5e1;
-      border-radius: 3px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: #94a3b8;
-    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 h-screen flex flex-col font-sans overflow-hidden">
@@ -33,7 +29,8 @@
 
     <!-- コントロールボタン群 -->
     <div class="flex items-center space-x-3 text-sm">
-      <button id="btn-load-drive" onclick="loadDriveFileMock()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg flex items-center space-x-2 transition shadow">
+      <!-- onclick を loadDriveFile() に変更 -->
+      <button id="btn-load-drive" onclick="loadDriveFile()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg flex items-center space-x-2 transition shadow">
         <i class="fa-brands fa-google-drive"></i>
         <span>Driveから開く</span>
       </button>
@@ -64,7 +61,7 @@
           <span id="current-filename" class="font-medium truncate">サンプル本（サンプルを表示中）</span>
         </div>
         <div class="flex items-center space-x-2 text-slate-400">
-          <span>※本文のテキストを選択すると右側に自動セットされます</span>
+          <span>※本文を選択すると右側に自動セットされます</span>
         </div>
       </div>
 
@@ -88,13 +85,11 @@
           <!-- 抜書きテキスト領域 -->
           <div>
             <label class="block text-xs font-semibold text-slate-500 mb-1">
-              抜書き（引用箇所）<span class="text-xs font-normal text-amber-600 ml-2">※HTML内でドラッグ選択すると同期されます</span>
+              抜書き（引用箇所）<span class="text-xs font-normal text-amber-600 ml-2">※HTML内でドラッグ選択すると自動同期されます</span>
             </label>
             <div class="relative">
               <textarea id="excerpt-input" rows="3" placeholder="左側のHTMLでテキストを選択するか、直接ここに入力してください..." class="w-full text-sm p-3 bg-amber-50/50 border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 leading-relaxed text-slate-700"></textarea>
-              <button onclick="clearExcerpt()" class="absolute top-2 right-2 text-slate-400 hover:text-slate-600 text-xs px-1.5 py-0.5 rounded bg-amber-100/50">
-                クリア
-              </button>
+              <button onclick="clearExcerpt()" class="absolute top-2 right-2 text-slate-400 hover:text-slate-600 text-xs px-1.5 py-0.5 rounded bg-amber-100/50">クリア</button>
             </div>
           </div>
 
@@ -104,7 +99,7 @@
             <textarea id="comment-input" rows="3" placeholder="重要な理由、疑問、自分のアイデアなどを記入..." class="w-full text-sm p-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 leading-relaxed"></textarea>
           </div>
 
-          <!-- タグ・ページ番号等 -->
+          <!-- タグ・参照先 -->
           <div class="flex space-x-3">
             <div class="w-1/2">
               <label class="block text-xs font-semibold text-slate-500 mb-1">章 / 節 / 参照先</label>
@@ -134,9 +129,7 @@
             <button onclick="clearAllNotes()" class="text-xs text-rose-500 hover:underline">すべて削除</button>
           </div>
 
-          <div id="notes-list" class="space-y-3">
-            <!-- JavaScriptで保存済みメモがここに挿入されます -->
-          </div>
+          <div id="notes-list" class="space-y-3"></div>
         </div>
 
       </div>
@@ -145,7 +138,91 @@
   </main>
 
   <script>
-    // --- 1. サンプルコンテンツ＆初期化 ---
+    // =========================================================
+    // ★ 設定: 発行した実際の API キーとクライアント ID をここに入力
+    // =========================================================
+    const API_KEY = 'YOUR_API_KEY';
+    const CLIENT_ID = 'YOUR_OAUTH_CLIENT_ID';
+    const SCOPES = 'https://www.googleapis.com/auth/drive.readonly';
+
+    let tokenClient;
+    let accessToken = null;
+    let pickerInited = false;
+    let gsisInited = false;
+
+    // --- Google API 初期化 ---
+    function gapiLoaded() {
+      gapi.load('picker', () => {
+        pickerInited = true;
+      });
+    }
+
+    function gisLoaded() {
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: async (response) => {
+          if (response.error !== undefined) {
+            throw (response);
+          }
+          accessToken = response.access_token;
+          createPicker();
+        },
+      });
+      gsisInited = true;
+    }
+
+    // 「Driveから開く」ボタンが押された時
+    function loadDriveFile() {
+      if (!pickerInited || !gsisInited) {
+        alert('Google API の読み込み中です。少し待ってから再試行してください。');
+        return;
+      }
+      if (accessToken === null) {
+        // ログイン・認証ポップアップ表示
+        tokenClient.requestAccessToken({ prompt: 'consent' });
+      } else {
+        createPicker();
+      }
+    }
+
+    // Google Picker ダイアログの表示
+    function createPicker() {
+      const view = new google.picker.View(google.picker.ViewId.DOCS);
+      view.setMimeTypes('text/html'); // HTMLファイルのみ表示
+
+      const picker = new google.picker.PickerBuilder()
+        .addView(view)
+        .setOAuthToken(accessToken)
+        .setDeveloperKey(API_KEY)
+        .setCallback(pickerCallback)
+        .build();
+      picker.setVisible(true);
+    }
+
+    // ファイル選択後のコールバック
+    async function pickerCallback(data) {
+      if (data.action === google.picker.Action.PICKED) {
+        const doc = data.docs[0];
+        const fileId = doc.id;
+        const fileName = doc.name;
+
+        document.getElementById('current-filename').textContent = fileName;
+
+        // Drive API から HTML コンテンツ（本文）を取得
+        try {
+          const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+            headers: { Authorization: `Bearer ${accessToken}` }
+          });
+          const htmlText = await res.text();
+          setIframeContent(htmlText);
+        } catch (err) {
+          alert('ファイルの読み込みに失敗しました: ' + err.message);
+        }
+      }
+    }
+
+    // --- サンプルデータとアプリ既存ロジック ---
     const sampleHTML = `
       <!DOCTYPE html>
       <html lang="ja">
@@ -153,21 +230,18 @@
         <meta charset="UTF-8">
         <style>
           body { font-family: sans-serif; line-height: 1.8; color: #1e293b; padding: 25px; max-width: 680px; margin: 0 auto; }
-          h1 { color: #0f172a; border-bottom: 2px solid #3b82f6; padding-bottom: 8px; margin-top: 0; }
+          h1 { color: #0f172a; border-bottom: 2px solid #3b82f6; padding-bottom: 8px; }
           h2 { color: #1e293b; margin-top: 24px; font-size: 1.25rem; }
           p { margin-bottom: 16px; text-align: justify; }
-          blockquote { border-left: 4px solid #cbd5e1; padding-left: 12px; color: #475569; margin: 16px 0; font-style: italic; }
-          .highlight { background-color: #fef08a; }
         </style>
       </head>
       <body>
         <h1>サンプル書籍：知的生産の技術（プレビュー）</h1>
         <h2>第1章 情報を収集する意義</h2>
         <p>文章を読むとき、私たちは単に文字を追っているのではない。著者の思考のフレームワークを自らの脳内に再現し、それを自分自身の経験や知識と照合する作業を行っているのだ。</p>
-        <p>重要なテキストに出会ったときは、積極的に「抜書き」を行い、その時に生じた自分自身のインスピレーションや疑問を書き留めておくことが極めて重要である。記録されない思考は、一瞬の間に雲散霧消してしまうからだ。</p>
+        <p>重要なテキストに出会ったときは、積極的に「抜書き」を行い、その時に生じた自分自身のインスピレーションや疑問を書き留めておくことが極めて重要である。</p>
         <h2>第2章 アウトプットへのつなげ方</h2>
-        <p>読書メモを効果的な知識データベースに変える鍵は、引用（抜書き）と個人の見解（コメント）を明確に分離して保存することにある。引用は客観的な事実であり、コメントは主体的な創造の芽である。</p>
-        <p>この二つが対になって保存されたメモ群は、将来新しいアイデアを組み立てる際の強力な構成要素（ビルディングブロック）となる。</p>
+        <p>読書メモを効果的な知識データベースに変える鍵は、引用（抜書き）と個人の見解（コメント）を明確に分離して保存することにある。</p>
       </body>
       </html>
     `;
@@ -175,21 +249,23 @@
     let currentNotes = JSON.parse(localStorage.getItem('reading_notes') || '[]');
 
     window.addEventListener('DOMContentLoaded', () => {
-      // サンプルHTMLをiframeにセット
       setIframeContent(sampleHTML);
       renderNotes();
+
+      // SDK読み込み完了を待機
+      setTimeout(() => {
+        if (window.gapi) gapiLoaded();
+        if (window.google) gisLoaded();
+      }, 500);
     });
 
-    // --- 2. iframeへのHTMLセットと選択テキスト監視 ---
     function setIframeContent(htmlText) {
       const iframe = document.getElementById('html-viewer');
       iframe.srcdoc = htmlText;
 
-      // iframeのロード完了後に選択イベントをハンドリング
       iframe.onload = () => {
         try {
           const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-          
           iframeDoc.addEventListener('mouseup', () => {
             const selectedText = iframeDoc.getSelection().toString().trim();
             if (selectedText) {
@@ -197,31 +273,20 @@
             }
           });
         } catch (e) {
-          console.warn('iframeのクロスドメイン制限により直接選択取得ができない場合があります。', e);
+          console.warn('クロスドメイン制限注意', e);
         }
       };
     }
 
-    // --- 3. Google Drive / ローカルファイルの読み込み ---
     function handleLocalFile(event) {
       const file = event.target.files[0];
       if (!file) return;
-
       document.getElementById('current-filename').textContent = file.name;
-
       const reader = new FileReader();
-      reader.onload = (e) => {
-        setIframeContent(e.target.result);
-      };
+      reader.onload = (e) => setIframeContent(e.target.result);
       reader.readAsText(file);
     }
 
-    function loadDriveFileMock() {
-      // 本来は Google Picker API を使用してファイルを選択します
-      alert("【Google Drive API 連携デモ】\n実際の実装では、ここで Google Picker API のダイアログが立ち上がり、Drive内のHTMLを選択できます。");
-    }
-
-    // --- 4. メモの保存・表示・管理機能 ---
     function saveNote() {
       const excerpt = document.getElementById('excerpt-input').value.trim();
       const comment = document.getElementById('comment-input').value.trim();
@@ -229,15 +294,13 @@
       const tagsStr = document.getElementById('tags-input').value.trim();
 
       if (!excerpt && !comment) {
-        alert('「抜書き」または「コメント」のいずれかを入力してください。');
+        alert('「抜書き」または「コメント」を入力してください。');
         return;
       }
 
       const note = {
         id: Date.now(),
-        excerpt: excerpt,
-        comment: comment,
-        chapter: chapter,
+        excerpt, comment, chapter,
         tags: tagsStr ? tagsStr.split(',').map(t => t.trim()) : [],
         filename: document.getElementById('current-filename').textContent,
         createdAt: new Date().toLocaleString('ja-JP')
@@ -246,10 +309,8 @@
       currentNotes.unshift(note);
       localStorage.setItem('reading_notes', JSON.stringify(currentNotes));
 
-      // フォームリセット
       document.getElementById('excerpt-input').value = '';
       document.getElementById('comment-input').value = '';
-
       renderNotes();
     }
 
@@ -258,48 +319,27 @@
       document.getElementById('notes-count').textContent = currentNotes.length;
 
       if (currentNotes.length === 0) {
-        container.innerHTML = `
-          <div class="text-center py-8 text-slate-400 text-xs bg-white rounded-lg border border-dashed border-slate-300">
-            まだ保存されたメモはありません。
-          </div>
-        `;
+        container.innerHTML = `<div class="text-center py-8 text-slate-400 text-xs bg-white rounded-lg border border-dashed border-slate-300">まだ保存されたメモはありません。</div>`;
         return;
       }
 
       container.innerHTML = currentNotes.map(note => `
-        <div class="bg-white rounded-lg p-4 border border-slate-200 shadow-sm space-y-2 relative group hover:border-slate-300 transition">
-          <div class="flex justify-between items-start text-xs text-slate-400 mb-1">
+        <div class="bg-white rounded-lg p-4 border border-slate-200 shadow-sm space-y-2 relative group">
+          <div class="flex justify-between text-xs text-slate-400 mb-1">
             <span class="font-medium text-slate-600">${escapeHtml(note.chapter || '章指定なし')}</span>
             <span>${note.createdAt}</span>
           </div>
 
-          ${note.excerpt ? `
-            <blockquote class="bg-amber-50/60 border-l-3 border-amber-400 p-2.5 rounded text-xs text-slate-700 leading-relaxed italic">
-              "${escapeHtml(note.excerpt)}"
-            </blockquote>
-          ` : ''}
+          ${note.excerpt ? `<blockquote class="bg-amber-50/60 border-l-3 border-amber-400 p-2.5 rounded text-xs text-slate-700 italic">"${escapeHtml(note.excerpt)}"</blockquote>` : ''}
+          ${note.comment ? `<p class="text-xs text-slate-800 pt-1">${escapeHtml(note.comment)}</p>` : ''}
 
-          ${note.comment ? `
-            <p class="text-xs text-slate-800 leading-relaxed font-normal pt-1">
-              ${escapeHtml(note.comment)}
-            </p>
-          ` : ''}
-
-          ${note.tags && note.tags.length > 0 ? `
-            <div class="flex flex-wrap gap-1 pt-1">
-              ${note.tags.map(tag => `<span class="bg-slate-100 text-slate-600 text-[10px] px-1.5 py-0.5 rounded">${escapeHtml(tag)}</span>`).join('')}
-            </div>
-          ` : ''}
-
-          <button onclick="deleteNote(${note.id})" class="absolute top-2 right-2 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition text-xs p-1">
-            <i class="fa-solid fa-trash"></i>
-          </button>
+          <button onclick="deleteNote(${note.id})" class="absolute top-2 right-2 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition text-xs p-1"><i class="fa-solid fa-trash"></i></button>
         </div>
       `).join('');
     }
 
     function deleteNote(id) {
-      if (confirm('このメモを削除してもよろしいですか？')) {
+      if (confirm('メモを削除しますか？')) {
         currentNotes = currentNotes.filter(n => n.id !== id);
         localStorage.setItem('reading_notes', JSON.stringify(currentNotes));
         renderNotes();
@@ -307,58 +347,33 @@
     }
 
     function clearAllNotes() {
-      if (confirm('すべての読書メモを削除しますか？この操作は取り消せません。')) {
+      if (confirm('すべてのメモを削除しますか？')) {
         currentNotes = [];
         localStorage.removeItem('reading_notes');
         renderNotes();
       }
     }
 
-    function clearExcerpt() {
-      document.getElementById('excerpt-input').value = '';
-    }
+    function clearExcerpt() { document.getElementById('excerpt-input').value = ''; }
 
-    // --- 5. Markdown エクスポート機能 ---
     function exportNotesMarkdown() {
-      if (currentNotes.length === 0) {
-        alert('出力するメモがありません。');
-        return;
-      }
-
+      if (currentNotes.length === 0) return alert('出力するメモがありません。');
       let md = `# 読書メモ エクスポート\n\n`;
-      md += `*出力日時: ${new Date().toLocaleString('ja-JP')}*\n\n---\n\n`;
-
       currentNotes.forEach((note, index) => {
         md += `### メモ #${currentNotes.length - index} ${note.chapter ? `(${note.chapter})` : ''}\n`;
-        md += `- **参照ファイル**: ${note.filename}\n`;
-        md += `- **記録日時**: ${note.createdAt}\n`;
-        if (note.tags.length > 0) md += `- **タグ**: ${note.tags.join(', ')}\n`;
-        md += `\n`;
-
-        if (note.excerpt) {
-          md += `> ${note.excerpt.replace(/\n/g, '\n> ')}\n\n`;
-        }
-
-        if (note.comment) {
-          md += `**コメント:**\n${note.comment}\n\n`;
-        }
-
-        md += `---\n\n`;
+        if (note.excerpt) md += `> ${note.excerpt.replace(/\n/g, '\n> ')}\n\n`;
+        if (note.comment) md += `**コメント:**\n${note.comment}\n\n---\n\n`;
       });
 
       const blob = new Blob([md], { type: 'text/markdown;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
+      a.href = URL.createObjectURL(blob);
       a.download = `reading_notes_${new Date().toISOString().slice(0, 10)}.md`;
       a.click();
-      URL.revokeObjectURL(url);
     }
 
     function escapeHtml(str) {
-      return str.replace(/[&<>"']/g, function(m) {
-        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
-      });
+      return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
     }
   </script>
 </body>
