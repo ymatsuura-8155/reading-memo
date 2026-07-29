@@ -29,7 +29,14 @@
 
     <!-- コントロールボタン群 -->
     <div class="flex items-center space-x-3 text-sm">
-      <!-- onclick を loadDriveFile() に変更 -->
+      <!-- ★追加: 新規本作成ボタン -->
+      <button onclick="openNewBookModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg flex items-center space-x-2 transition shadow">
+        <i class="fa-solid fa-file-circle-plus text-amber-300"></i>
+        <span>新規本作成</span>
+      </button>
+
+      <div class="h-4 w-px bg-slate-700 mx-1"></div>
+
       <button id="btn-load-drive" onclick="loadDriveFile()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg flex items-center space-x-2 transition shadow">
         <i class="fa-brands fa-google-drive"></i>
         <span>Driveから開く</span>
@@ -136,6 +143,44 @@
     </section>
 
   </main>
+
+  <!-- ★追加: 新規本作成ダイアログ (モーダル) -->
+  <div id="new-book-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="font-bold text-slate-800 text-lg flex items-center space-x-2">
+          <i class="fa-solid fa-book text-indigo-600"></i>
+          <span>新しい本のHTMLファイルを作成</span>
+        </h3>
+        <button onclick="closeNewBookModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">書籍タイトル <span class="text-rose-500">*</span></label>
+          <input type="text" id="new-book-title" placeholder="例: 喜劇の構造" class="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">著者名</label>
+          <input type="text" id="new-book-author" placeholder="例: 山田 太郎" class="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">目次・章構成（1行に1つの章名・見出しを入力）</label>
+          <textarea id="new-book-chapters" rows="5" placeholder="はじめに&#10;第1章 序論&#10;第2章 展開と考察&#10;第3章 結論&#10;おわりに" class="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none leading-relaxed"></textarea>
+        </div>
+      </div>
+
+      <div class="flex justify-end space-x-3 pt-2">
+        <button onclick="closeNewBookModal()" class="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition">キャンセル</button>
+        <button onclick="createNewBookHTML()" class="px-4 py-2 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow transition flex items-center space-x-1.5">
+          <i class="fa-solid fa-download"></i>
+          <span>HTMLを生成して読み込む</span>
+        </button>
+      </div>
+    </div>
+  </div>
 
   <script>
     // =========================================================
@@ -285,6 +330,73 @@
       const reader = new FileReader();
       reader.onload = (e) => setIframeContent(e.target.result);
       reader.readAsText(file);
+    }
+
+    // ★追加: 新規本作成モーダルの開閉・生成ロジック
+    function openNewBookModal() {
+      document.getElementById('new-book-modal').classList.remove('hidden');
+    }
+
+    function closeNewBookModal() {
+      document.getElementById('new-book-modal').classList.add('hidden');
+    }
+
+    function createNewBookHTML() {
+      const title = document.getElementById('new-book-title').value.trim();
+      const author = document.getElementById('new-book-author').value.trim();
+      const chaptersText = document.getElementById('new-book-chapters').value.trim();
+
+      if (!title) {
+        alert('書籍タイトルを入力してください。');
+        return;
+      }
+
+      const chapterList = chaptersText
+        ? chaptersText.split('\n').filter(line => line.trim() !== '')
+        : ['第1章'];
+
+      let chaptersHtml = '';
+      chapterList.forEach(ch => {
+        chaptersHtml += `
+        <h2>${escapeHtml(ch)}</h2>
+        <p>（ここに「${escapeHtml(ch)}」の本文やメモを入力・貼り付けしてください）</p>`;
+      });
+
+      const generatedHTML = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>${escapeHtml(title)}</title>
+  <style>
+    body { font-family: sans-serif; line-height: 1.8; color: #1e293b; padding: 25px; max-width: 680px; margin: 0 auto; }
+    h1 { color: #0f172a; border-bottom: 2px solid #6366f1; padding-bottom: 8px; }
+    .author { font-size: 0.9rem; color: #64748b; margin-top: -8px; margin-bottom: 24px; }
+    h2 { color: #1e293b; margin-top: 32px; font-size: 1.2rem; border-left: 4px solid #6366f1; padding-left: 8px; }
+    p { margin-bottom: 16px; text-align: justify; }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(title)}</h1>
+  ${author ? `<div class="author">著者: ${escapeHtml(author)}</div>` : ''}
+  ${chaptersHtml}
+</body>
+</html>`;
+
+      const fileName = `${title}.html`;
+
+      // 1. iframeへロード
+      document.getElementById('current-filename').textContent = fileName;
+      setIframeContent(generatedHTML);
+
+      // 2. ローカルファイルとして自動ダウンロード保存
+      const blob = new Blob([generatedHTML], { type: 'text/html;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = fileName;
+      a.click();
+
+      closeNewBookModal();
+      alert(`「${title}」のHTMLを作成・ダウンロードしました！\nGoogle Drive等にアップロードして読み込むことも可能です。`);
     }
 
     function saveNote() {
