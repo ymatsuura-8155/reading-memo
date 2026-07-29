@@ -1,1 +1,620 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>読書メモ App</title>
+    <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --sidebar-bg: #ffffff;
+            --main-bg: #ffffff;
+            --border-color: #e9ecef;
+            --text-primary: #212529;
+            --text-secondary: #6c757d;
+            --accent-color: #3b82f6;
+            --accent-hover: #2563eb;
+            --danger-color: #ef4444;
+            --card-bg: #f8fafc;
+        }
 
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            color: var(--text-primary);
+            background-color: var(--bg-color);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* ヘッダー */
+        header {
+            background-color: #1e293b;
+            color: #ffffff;
+            padding: 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 10;
+        }
+
+        .header-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        /* メインコンテナ（左右ペイン） */
+        .app-container {
+            display: flex;
+            flex: 1;
+            height: calc(100vh - 57px);
+            overflow: hidden;
+        }
+
+        /* 左ペイン（閲覧・リスト） */
+        .left-pane {
+            width: 45%;
+            min-width: 320px;
+            max-width: 600px;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .book-info-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+            background-color: #ffffff;
+        }
+
+        .book-title-input {
+            font-size: 1.2rem;
+            font-weight: bold;
+            width: 100%;
+            border: 1px solid transparent;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-bottom: 6px;
+        }
+
+        .book-title-input:hover, .book-title-input:focus {
+            border-color: var(--border-color);
+            background-color: #fff;
+        }
+
+        .book-author-input {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            width: 100%;
+            border: 1px solid transparent;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .notes-list-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .note-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--accent-color);
+            border-radius: 6px;
+            padding: 16px;
+            position: relative;
+            transition: transform 0.1s ease, box-shadow 0.1s ease;
+        }
+
+        .note-card:hover {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        .note-card-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .note-card-quote {
+            font-size: 0.95rem;
+            color: #334155;
+            line-height: 1.6;
+            margin-bottom: 12px;
+            background-color: #ffffff;
+            padding: 10px 12px;
+            border-radius: 4px;
+            border-left: 3px solid #cbd5e1;
+            white-space: pre-wrap;
+        }
+
+        .note-card-comment {
+            font-size: 0.9rem;
+            color: #1e293b;
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+
+        .note-card-actions {
+            margin-top: 10px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        /* 右ペイン（入力フォーム） */
+        .right-pane {
+            flex: 1;
+            background-color: var(--main-bg);
+            padding: 24px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-container {
+            max-width: 700px;
+            width: 100%;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .form-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #334155;
+            padding-bottom: 8px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-group label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            font-family: inherit;
+            transition: border-color 0.15s;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        }
+
+        textarea.form-control {
+            resize: vertical;
+            min-height: 120px;
+            line-height: 1.6;
+        }
+
+        /* ボタン */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.15s;
+        }
+
+        .btn-primary {
+            background-color: var(--accent-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--accent-hover);
+        }
+
+        .btn-secondary {
+            background-color: #f1f5f9;
+            color: #475569;
+            border-color: #cbd5e1;
+        }
+
+        .btn-secondary:hover {
+            background-color: #e2e8f0;
+        }
+
+        .btn-danger {
+            background-color: #fee2e2;
+            color: var(--danger-color);
+        }
+
+        .btn-danger:hover {
+            background-color: #fecaca;
+        }
+
+        .btn-sm {
+            padding: 4px 8px;
+            font-size: 0.8rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--text-secondary);
+            padding: 40px 20px;
+        }
+
+        /* ドロップエリア */
+        .drag-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(59, 130, 246, 0.9);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+        .drag-over .drag-overlay {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="drag-overlay">JSONファイルをここにドロップして復元</div>
+
+    <header>
+        <div class="header-title">
+            📚 読書メモ Studio
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-secondary" onclick="document.getElementById('file-input').click()">
+                📂 ドライブ/PCから開く
+            </button>
+            <input type="file" id="file-input" accept=".json" style="display: none;" onchange="loadJSONFile(event)">
+            
+            <button class="btn btn-primary" onclick="saveJSONFile()">
+                💾 ドライブへ保存 (JSON)
+            </button>
+            <button class="btn btn-secondary" onclick="createNewBook()">
+                ✨ 新しい書籍
+            </button>
+        </div>
+    </header>
+
+    <div class="app-container">
+        <!-- 左ペイン: 書籍情報と抜書きリスト -->
+        <div class="left-pane">
+            <div class="book-info-header">
+                <input type="text" id="book-title" class="book-title-input" placeholder="書籍のタイトルを入力..." value="無題の書籍" onchange="updateBookInfo()">
+                <input type="text" id="book-author" class="book-author-input" placeholder="著者名を入力..." value="" onchange="updateBookInfo()">
+            </div>
+
+            <div class="notes-list-container" id="notes-list">
+                <!-- メモカードがここに動的に追加されます -->
+            </div>
+        </div>
+
+        <!-- 右ペイン: メモ入力フォーム -->
+        <div class="right-pane">
+            <div class="form-container">
+                <div class="form-title" id="form-heading">📝 新しいメモを追加</div>
+                
+                <input type="hidden" id="editing-note-id" value="">
+
+                <div class="form-group" style="max-width: 200px;">
+                    <label for="note-page">該当ページ / 章</label>
+                    <input type="text" id="note-page" class="form-control" placeholder="例: p.45 / 第2章">
+                </div>
+
+                <div class="form-group">
+                    <label for="note-quote">抜書き (引用文章) *</label>
+                    <textarea id="note-quote" class="form-control" placeholder="書籍から感銘を受けた文章や重要な箇所を転記します..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="note-comment">自分のコメント / 考察</label>
+                    <textarea id="note-comment" class="form-control" placeholder="抜書きに対する自分の気づき、考え、アクションプランなどを書き留めます..."></textarea>
+                </div>
+
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button class="btn btn-secondary" id="cancel-edit-btn" style="display: none;" onclick="resetForm()">キャンセル</button>
+                    <button class="btn btn-primary" onclick="saveNote()">メモを保存する</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // データモデルの初期化
+        let currentData = {
+            book: {
+                title: "無題の書籍",
+                author: "",
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            },
+            notes: []
+        };
+
+        // 初期ロード時
+        window.onload = function() {
+            renderApp();
+            setupDragAndDrop();
+        };
+
+        // 書籍情報の更新
+        function updateBookInfo() {
+            currentData.book.title = document.getElementById('book-title').value || "無題の書籍";
+            currentData.book.author = document.getElementById('book-author').value || "";
+            currentData.book.updated_at = new Date().toISOString();
+        }
+
+        // 画面全体の描画
+        function renderApp() {
+            document.getElementById('book-title').value = currentData.book.title;
+            document.getElementById('book-author').value = currentData.book.author || "";
+
+            const listEl = document.getElementById('notes-list');
+            listEl.innerHTML = "";
+
+            if (currentData.notes.length === 0) {
+                listEl.innerHTML = `
+                    <div class="empty-state">
+                        <p>まだメモが登録されていません。</p>
+                        <p style="font-size: 0.85rem; margin-top: 8px;">右側のフォームから抜書きとコメントを追加してください。</p>
+                    </div>
+                `;
+                return;
+            }
+
+            currentData.notes.forEach((note) => {
+                const card = document.createElement('div');
+                card.className = 'note-card';
+                card.innerHTML = `
+                    <div class="note-card-meta">
+                        <span>📍 ${escapeHtml(note.page || 'ページ未指定')}</span>
+                        <span>${new Date(note.created_at).toLocaleDateString('ja-JP')}</span>
+                    </div>
+                    <div class="note-card-quote">“${escapeHtml(note.quote)}”</div>
+                    ${note.comment ? `<div class="note-card-comment">${escapeHtml(note.comment)}</div>` : ''}
+                    <div class="note-card-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="editNote('${note.id}')">編集</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteNote('${note.id}')">削除</button>
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+        }
+
+        // メモの保存（追加または編集）
+        function saveNote() {
+            const quote = document.getElementById('note-quote').value.trim();
+            const comment = document.getElementById('note-comment').value.trim();
+            const page = document.getElementById('note-page').value.trim();
+            const editId = document.getElementById('editing-note-id').value;
+
+            if (!quote) {
+                alert('抜書き（引用文章）を入力してください。');
+                return;
+            }
+
+            if (editId) {
+                // 既存メモの更新
+                const noteIndex = currentData.notes.findIndex(n => n.id === editId);
+                if (noteIndex !== -1) {
+                    currentData.notes[noteIndex] = {
+                        ...currentData.notes[noteIndex],
+                        page: page,
+                        quote: quote,
+                        comment: comment,
+                        updated_at: new Date().toISOString()
+                    };
+                }
+            } else {
+                // 新規メモの追加
+                const newNote = {
+                    id: 'note_' + Date.now(),
+                    page: page,
+                    quote: quote,
+                    comment: comment,
+                    created_at: new Date().toISOString()
+                };
+                currentData.notes.push(newNote);
+            }
+
+            currentData.book.updated_at = new Date().toISOString();
+            resetForm();
+            renderApp();
+        }
+
+        // メモ編集フォームへのセット
+        function editNote(id) {
+            const note = currentData.notes.find(n => n.id === id);
+            if (!note) return;
+
+            document.getElementById('editing-note-id').value = note.id;
+            document.getElementById('note-page').value = note.page || '';
+            document.getElementById('note-quote').value = note.quote || '';
+            document.getElementById('note-comment').value = note.comment || '';
+
+            document.getElementById('form-heading').innerText = '✏️ メモを編集';
+            document.getElementById('cancel-edit-btn').style.display = 'inline-flex';
+        }
+
+        // 編集フォームのリセット
+        function resetForm() {
+            document.getElementById('editing-note-id').value = '';
+            document.getElementById('note-page').value = '';
+            document.getElementById('note-quote').value = '';
+            document.getElementById('note-comment').value = '';
+
+            document.getElementById('form-heading').innerText = '📝 新しいメモを追加';
+            document.getElementById('cancel-edit-btn').style.display = 'none';
+        }
+
+        // メモ削除
+        function deleteNote(id) {
+            if (!confirm('このメモを削除してもよろしいですか？')) return;
+            currentData.notes = currentData.notes.filter(n => n.id !== id);
+            currentData.book.updated_at = new Date().toISOString();
+            renderApp();
+        }
+
+        // 新しい書籍メモを作成
+        function createNewBook() {
+            if (currentData.notes.length > 0 && !confirm('現在の作業内容は破棄されます（保存していない場合）。新しい書籍を作成しますか？')) {
+                return;
+            }
+            currentData = {
+                book: {
+                    title: "無題の書籍",
+                    author: "",
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                },
+                notes: []
+            };
+            resetForm();
+            renderApp();
+        }
+
+        // JSONファイルの保存（ローカル保存・Googleドライブの同期フォルダへ）
+        function saveJSONFile() {
+            updateBookInfo();
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentData, null, 2));
+            const downloadAnchor = document.createElement('a');
+            
+            // ファイル名の生成（書籍タイトルをファイル名に使用）
+            const safeTitle = currentData.book.title.replace(/[/\\?%*:|"<>]/g, '_');
+            const filename = `${safeTitle || '読書メモ'}.json`;
+
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", filename);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        // JSONファイルの読み込み
+        function loadJSONFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (parsed.book && Array.isArray(parsed.notes)) {
+                        currentData = parsed;
+                        resetForm();
+                        renderApp();
+                    } else {
+                        alert('JSONファイルの構造が正しくありません。');
+                    }
+                } catch (err) {
+                    alert('JSONファイルの解析に失敗しました。');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = ''; // リセット
+        }
+
+        // ドラッグ＆ドロップの設定
+        function setupDragAndDrop() {
+            const body = document.body;
+
+            body.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                body.classList.add('drag-over');
+            });
+
+            body.addEventListener('dragleave', (e) => {
+                if (e.clientX === 0 && e.clientY === 0) {
+                    body.classList.remove('drag-over');
+                }
+            });
+
+            body.addEventListener('drop', (e) => {
+                e.preventDefault();
+                body.classList.remove('drag-over');
+
+                const files = e.dataTransfer.files;
+                if (files.length > 0 && files[0].name.endsWith('.json')) {
+                    const reader = new FileReader();
+                    reader.onload = function(evt) {
+                        try {
+                            const parsed = JSON.parse(evt.target.result);
+                            if (parsed.book && Array.isArray(parsed.notes)) {
+                                currentData = parsed;
+                                resetForm();
+                                renderApp();
+                            } else {
+                                alert('無効なJSON構造です。');
+                            }
+                        } catch (err) {
+                            alert('JSONファイルの読み込みエラーが発生しました。');
+                        }
+                    };
+                    reader.readAsText(files[0]);
+                }
+            });
+        }
+
+        // エスケープ処理
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;')
+                      .replace(/</g, '&lt;')
+                      .replace(/>/g, '&gt;')
+                      .replace(/"/g, '&quot;')
+                      .replace(/'/g, '&#039;');
+        }
+    </script>
+</body>
+</html>
