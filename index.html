@@ -3,14 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Google Drive HTML 読書メモ Viewer</title>
+  <title>HTML 読書メモ & 抜書き管理アプリ</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  
-  <!-- Google API & Google Identity Services SDK の追加 -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="https://apis.google.com/js/api.js" async defer></script>
-
   <style>
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
@@ -22,35 +17,33 @@
   <!-- ヘッダー -->
   <header class="bg-slate-900 text-white px-6 py-3 flex justify-between items-center shadow-md z-10">
     <div class="flex items-center space-x-3">
-      <i class="fa-solid fa-book-open text-amber-400 text-xl"></i>
-      <h1 class="font-bold text-lg tracking-wide">Drive HTML 読書メモ</h1>
-      <span class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700">Canvas WebApp</span>
+      <i class="fa-solid fa-book-bookmark text-amber-400 text-xl"></i>
+      <h1 class="font-bold text-lg tracking-wide">HTML 読書メモ Viewer & Editor</h1>
+      <span class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700">Portable App</span>
     </div>
 
     <!-- コントロールボタン群 -->
     <div class="flex items-center space-x-3 text-sm">
-      <!-- ★追加: 新規本作成ボタン -->
       <button onclick="openNewBookModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg flex items-center space-x-2 transition shadow">
-        <i class="fa-solid fa-file-circle-plus text-amber-300"></i>
+        <i class="fa-solid fa-plus text-amber-300"></i>
         <span>新規本作成</span>
-      </button>
-
-      <div class="h-4 w-px bg-slate-700 mx-1"></div>
-
-      <button id="btn-load-drive" onclick="loadDriveFile()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg flex items-center space-x-2 transition shadow">
-        <i class="fa-brands fa-google-drive"></i>
-        <span>Driveから開く</span>
       </button>
 
       <label class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg flex items-center space-x-2 cursor-pointer border border-slate-700 transition">
         <i class="fa-solid fa-file-arrow-up text-emerald-400"></i>
-        <span>ローカルHTML選択</span>
+        <span>HTMLを開く</span>
         <input type="file" id="local-file-input" accept=".html,.htm" class="hidden" onchange="handleLocalFile(event)">
       </label>
 
       <div class="h-4 w-px bg-slate-700 mx-1"></div>
 
-      <button onclick="exportNotesMarkdown()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition">
+      <!-- メモが反映された状態のHTMLを書き出し -->
+      <button onclick="downloadUpdatedHTML()" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition shadow font-medium">
+        <i class="fa-solid fa-floppy-disk"></i>
+        <span>メモ付きHTMLを保存</span>
+      </button>
+
+      <button onclick="exportNotesMarkdown()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition border border-slate-700">
         <i class="fa-solid fa-download"></i>
         <span>Markdown出力</span>
       </button>
@@ -60,16 +53,14 @@
   <!-- メインコンテンツ (左右2カラム) -->
   <main class="flex-1 flex overflow-hidden">
 
-    <!-- 左カラム: HTML プレビューエリア -->
+    <!-- 左カラム: HTML 本文プレビュー -->
     <section class="w-1/2 flex flex-col border-r border-slate-300 bg-white relative">
       <div class="bg-slate-50 border-b border-slate-200 px-4 py-2 flex justify-between items-center text-xs text-slate-600">
         <div class="flex items-center space-x-2 truncate">
           <i class="fa-solid fa-file-code text-blue-500"></i>
-          <span id="current-filename" class="font-medium truncate">サンプル本（サンプルを表示中）</span>
+          <span id="current-filename" class="font-medium truncate">サンプル書籍（プレビュー中）</span>
         </div>
-        <div class="flex items-center space-x-2 text-slate-400">
-          <span>※本文を選択すると右側に自動セットされます</span>
-        </div>
+        <span class="text-slate-400">※本文を選択すると右側の抜書き欄に自動セットされます</span>
       </div>
 
       <!-- iframe 表示領域 -->
@@ -78,59 +69,59 @@
       </div>
     </section>
 
-    <!-- 右カラム: 抜書き＆コメントメモエリア -->
+    <!-- 右カラム: 抜書き & メモ入力・カード一覧 -->
     <section class="w-1/2 flex flex-col bg-slate-50 overflow-y-auto">
       <div class="p-5 max-w-2xl mx-auto w-full space-y-6">
 
-        <!-- 新規メモ作成カード -->
+        <!-- 新規抜書き＆メモセット作成カード -->
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
           <h2 class="font-bold text-slate-800 text-base flex items-center space-x-2">
             <i class="fa-solid fa-pen-to-square text-indigo-500"></i>
-            <span>新しいメモを作成</span>
+            <span>新しい「抜書き ＆ メモ」を作成</span>
           </h2>
 
-          <!-- 抜書きテキスト領域 -->
+          <!-- 1. 抜書き（引用箇所） -->
           <div>
-            <label class="block text-xs font-semibold text-slate-500 mb-1">
-              抜書き（引用箇所）<span class="text-xs font-normal text-amber-600 ml-2">※HTML内でドラッグ選択すると自動同期されます</span>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">
+              ① 抜書き（引用文）<span class="text-xs font-normal text-amber-600 ml-2">※本文をドラッグ選択すると自動反映</span>
             </label>
             <div class="relative">
-              <textarea id="excerpt-input" rows="3" placeholder="左側のHTMLでテキストを選択するか、直接ここに入力してください..." class="w-full text-sm p-3 bg-amber-50/50 border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 leading-relaxed text-slate-700"></textarea>
+              <textarea id="excerpt-input" rows="3" placeholder="左側のHTMLで文章を選択するか、直接入力してください..." class="w-full text-sm p-3 bg-amber-50/50 border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 leading-relaxed text-slate-800"></textarea>
               <button onclick="clearExcerpt()" class="absolute top-2 right-2 text-slate-400 hover:text-slate-600 text-xs px-1.5 py-0.5 rounded bg-amber-100/50">クリア</button>
             </div>
           </div>
 
-          <!-- コメント入力領域 -->
+          <!-- 2. コメント・考察 -->
           <div>
-            <label class="block text-xs font-semibold text-slate-500 mb-1">自分のコメント・感想</label>
-            <textarea id="comment-input" rows="3" placeholder="重要な理由、疑問、自分のアイデアなどを記入..." class="w-full text-sm p-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 leading-relaxed"></textarea>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">② 自分のコメント・感想・考察</label>
+            <textarea id="comment-input" rows="3" placeholder="引用に対する自分の考え、疑問、アイデアなどを書き込みます..." class="w-full text-sm p-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 leading-relaxed"></textarea>
           </div>
 
-          <!-- タグ・参照先 -->
+          <!-- 3. 挿入先指定・タグ -->
           <div class="flex space-x-3">
             <div class="w-1/2">
-              <label class="block text-xs font-semibold text-slate-500 mb-1">章 / 節 / 参照先</label>
-              <input type="text" id="chapter-input" placeholder="例: 第2章 パラダイムの転換" class="w-full text-xs p-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500">
+              <label class="block text-xs font-semibold text-slate-600 mb-1">章 / 参照見出し</label>
+              <input type="text" id="chapter-input" placeholder="例: 第1章 思考の枠組み" class="w-full text-xs p-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500">
             </div>
             <div class="w-1/2">
-              <label class="block text-xs font-semibold text-slate-500 mb-1">タグ (カンマ区切り)</label>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">タグ (カンマ区切り)</label>
               <input type="text" id="tags-input" placeholder="例: 思考法, 重要" class="w-full text-xs p-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500">
             </div>
           </div>
 
           <!-- 保存ボタン -->
-          <button onclick="saveNote()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg text-sm transition shadow-sm flex items-center justify-center space-x-2">
-            <i class="fa-solid fa-bookmark"></i>
-            <span>メモを保存する</span>
+          <button onclick="saveNoteAndEmbed()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg text-sm transition shadow flex items-center justify-center space-x-2">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <span>メモをHTML内に保存・直接埋め込む</span>
           </button>
         </div>
 
-        <!-- 保存されたメモ一覧 -->
+        <!-- 保存された「抜書き＆メモ」一覧 -->
         <div class="space-y-4">
           <div class="flex justify-between items-center">
             <h3 class="font-bold text-slate-700 text-sm flex items-center space-x-2">
-              <i class="fa-solid fa-list-ul text-slate-500"></i>
-              <span>保存したメモ一覧</span>
+              <i class="fa-solid fa-layer-group text-slate-500"></i>
+              <span>作成したメモセット一覧</span>
               <span id="notes-count" class="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-semibold">0</span>
             </h3>
             <button onclick="clearAllNotes()" class="text-xs text-rose-500 hover:underline">すべて削除</button>
@@ -141,16 +132,15 @@
 
       </div>
     </section>
-
   </main>
 
-  <!-- ★追加: 新規本作成ダイアログ (モーダル) -->
+  <!-- 新規本作成ダイアログ -->
   <div id="new-book-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 space-y-4">
       <div class="flex justify-between items-center border-b pb-3">
         <h3 class="font-bold text-slate-800 text-lg flex items-center space-x-2">
           <i class="fa-solid fa-book text-indigo-600"></i>
-          <span>新しい本のHTMLファイルを作成</span>
+          <span>新しい本のベースHTMLを作成</span>
         </h3>
         <button onclick="closeNewBookModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
       </div>
@@ -158,17 +148,17 @@
       <div class="space-y-3">
         <div>
           <label class="block text-xs font-semibold text-slate-600 mb-1">書籍タイトル <span class="text-rose-500">*</span></label>
-          <input type="text" id="new-book-title" placeholder="例: 喜劇の構造" class="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          <input type="text" id="new-book-title" placeholder="例: 知的生産の技術" class="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
         </div>
 
         <div>
           <label class="block text-xs font-semibold text-slate-600 mb-1">著者名</label>
-          <input type="text" id="new-book-author" placeholder="例: 山田 太郎" class="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          <input type="text" id="new-book-author" placeholder="例: 梅棹 忠夫" class="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">目次・章構成（1行に1つの章名・見出しを入力）</label>
-          <textarea id="new-book-chapters" rows="5" placeholder="はじめに&#10;第1章 序論&#10;第2章 展開と考察&#10;第3章 結論&#10;おわりに" class="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none leading-relaxed"></textarea>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">目次・章構成（1行に1つの章）</label>
+          <textarea id="new-book-chapters" rows="4" placeholder="はじめに&#10;第1章 情報を収集する意義&#10;第2章 アウトプットへのつなげ方&#10;おわりに" class="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none leading-relaxed"></textarea>
         </div>
       </div>
 
@@ -176,134 +166,57 @@
         <button onclick="closeNewBookModal()" class="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition">キャンセル</button>
         <button onclick="createNewBookHTML()" class="px-4 py-2 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow transition flex items-center space-x-1.5">
           <i class="fa-solid fa-download"></i>
-          <span>HTMLを生成して読み込む</span>
+          <span>生成して読み込む</span>
         </button>
       </div>
     </div>
   </div>
 
   <script>
-    // =========================================================
-    // ★ 設定: 発行した実際の API キーとクライアント ID をここに入力
-    // =========================================================
-    const API_KEY = 'AIzaSyDNesXt1l4zQZFoWHO4Y6j89WwGOmourqg';
-    const CLIENT_ID = '213552323111-4k8qc1s3iqe9lrufkv4j4cpcj6dfe81q.apps.googleusercontent.com';
-    const SCOPES = 'https://www.googleapis.com/auth/drive.readonly';
+    let currentNotes = [];
 
-    let tokenClient;
-    let accessToken = null;
-    let pickerInited = false;
-    let gsisInited = false;
-
-    // --- Google API 初期化 ---
-    function gapiLoaded() {
-      gapi.load('picker', () => {
-        pickerInited = true;
-      });
+    // --- デフォルトサンプルHTML ---
+    const sampleHTML = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>知的生産の技術（サンプル）</title>
+  <style>
+    body { font-family: sans-serif; line-height: 1.8; color: #1e293b; padding: 25px; max-width: 680px; margin: 0 auto; }
+    h1 { color: #0f172a; border-bottom: 2px solid #3b82f6; padding-bottom: 8px; }
+    h2 { color: #1e293b; margin-top: 28px; font-size: 1.25rem; border-left: 4px solid #3b82f6; padding-left: 8px; }
+    p { margin-bottom: 16px; text-align: justify; }
+    /* 埋め込みメモのカードスタイル */
+    .embedded-note-card {
+      background-color: #fefce8;
+      border: 1px solid #fef08a;
+      border-left: 5px solid #eab308;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 20px 0;
+      font-size: 0.9rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
-
-    function gisLoaded() {
-      tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: async (response) => {
-          if (response.error !== undefined) {
-            throw (response);
-          }
-          accessToken = response.access_token;
-          createPicker();
-        },
-      });
-      gsisInited = true;
-    }
-
-    // 「Driveから開く」ボタンが押された時
-    function loadDriveFile() {
-      if (!pickerInited || !gsisInited) {
-        alert('Google API の読み込み中です。少し待ってから再試行してください。');
-        return;
-      }
-      if (accessToken === null) {
-        // ログイン・認証ポップアップ表示
-        tokenClient.requestAccessToken({ prompt: 'consent' });
-      } else {
-        createPicker();
-      }
-    }
-
-    // Google Picker ダイアログの表示
-    function createPicker() {
-      const view = new google.picker.View(google.picker.ViewId.DOCS);
-      view.setMimeTypes('text/html'); // HTMLファイルのみ表示
-
-      const picker = new google.picker.PickerBuilder()
-        .addView(view)
-        .setOAuthToken(accessToken)
-        .setDeveloperKey(API_KEY)
-        .setCallback(pickerCallback)
-        .build();
-      picker.setVisible(true);
-    }
-
-    // ファイル選択後のコールバック
-    async function pickerCallback(data) {
-      if (data.action === google.picker.Action.PICKED) {
-        const doc = data.docs[0];
-        const fileId = doc.id;
-        const fileName = doc.name;
-
-        document.getElementById('current-filename').textContent = fileName;
-
-        // Drive API から HTML コンテンツ（本文）を取得
-        try {
-          const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-            headers: { Authorization: `Bearer ${accessToken}` }
-          });
-          const htmlText = await res.text();
-          setIframeContent(htmlText);
-        } catch (err) {
-          alert('ファイルの読み込みに失敗しました: ' + err.message);
-        }
-      }
-    }
-
-    // --- サンプルデータとアプリ既存ロジック ---
-    const sampleHTML = `
-      <!DOCTYPE html>
-      <html lang="ja">
-      <head>
-        <meta charset="UTF-8">
-        <style>
-          body { font-family: sans-serif; line-height: 1.8; color: #1e293b; padding: 25px; max-width: 680px; margin: 0 auto; }
-          h1 { color: #0f172a; border-bottom: 2px solid #3b82f6; padding-bottom: 8px; }
-          h2 { color: #1e293b; margin-top: 24px; font-size: 1.25rem; }
-          p { margin-bottom: 16px; text-align: justify; }
-        </style>
-      </head>
-      <body>
-        <h1>サンプル書籍：知的生産の技術（プレビュー）</h1>
-        <h2>第1章 情報を収集する意義</h2>
-        <p>文章を読むとき、私たちは単に文字を追っているのではない。著者の思考のフレームワークを自らの脳内に再現し、それを自分自身の経験や知識と照合する作業を行っているのだ。</p>
-        <p>重要なテキストに出会ったときは、積極的に「抜書き」を行い、その時に生じた自分自身のインスピレーションや疑問を書き留めておくことが極めて重要である。</p>
-        <h2>第2章 アウトプットへのつなげ方</h2>
-        <p>読書メモを効果的な知識データベースに変える鍵は、引用（抜書き）と個人の見解（コメント）を明確に分離して保存することにある。</p>
-      </body>
-      </html>
-    `;
-
-    let currentNotes = JSON.parse(localStorage.getItem('reading_notes') || '[]');
+    .embedded-note-card .note-header { font-size: 0.75rem; color: #854d0e; font-weight: bold; margin-bottom: 6px; }
+    .embedded-note-card blockquote { margin: 0 0 8px 0; padding-left: 10px; border-left: 2px solid #fde047; font-style: italic; color: #451a03; }
+    .embedded-note-card .note-comment { color: #1e293b; margin: 0; font-weight: 500; }
+  </style>
+</head>
+<body>
+  <h1>知的生産の技術（サンプル）</h1>
+  <h2>第1章 情報を収集する意義</h2>
+  <p>文章を読むとき、私たちは単に文字を追っているのではない。著者の思考のフレームワークを自らの脳内に再現し、それを自分自身の経験や知識と照合する作業を行っているのだ。</p>
+  <p>重要なテキストに出会ったときは、積極的に「抜書き」を行い、その時に生じた自分自身のインスピレーションや疑問を書き留めておくことが極めて重要である。</p>
+  <h2>第2章 アウトプットへのつなげ方</h2>
+  <p>読書メモを効果的な知識データベースに変える鍵は、引用（抜書き）と個人の見解（コメント）を明確に分離して保存することにある。</p>
+</body>
+</html>`;
 
     window.addEventListener('DOMContentLoaded', () => {
       setIframeContent(sampleHTML);
-      renderNotes();
-
-      // SDK読み込み完了を待機
-      setTimeout(() => {
-        if (window.gapi) gapiLoaded();
-        if (window.google) gisLoaded();
-      }, 500);
     });
 
+    // --- iframe 内コンテンツのセット & テキスト選択検知 ---
     function setIframeContent(htmlText) {
       const iframe = document.getElementById('html-viewer');
       iframe.srcdoc = htmlText;
@@ -311,18 +224,25 @@
       iframe.onload = () => {
         try {
           const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+          
+          // テキスト選択時の自動抜書き取得
           iframeDoc.addEventListener('mouseup', () => {
             const selectedText = iframeDoc.getSelection().toString().trim();
             if (selectedText) {
               document.getElementById('excerpt-input').value = selectedText;
             }
           });
+
+          // 既にHTML内に埋め込まれているメモカードがあれば解析・同期
+          syncNotesFromHTML(iframeDoc);
+
         } catch (e) {
-          console.warn('クロスドメイン制限注意', e);
+          console.warn('iframeアクセスエラー:', e);
         }
       };
     }
 
+    // --- ローカルHTMLファイルの読み込み ---
     function handleLocalFile(event) {
       const file = event.target.files[0];
       if (!file) return;
@@ -332,34 +252,195 @@
       reader.readAsText(file);
     }
 
-    // ★追加: 新規本作成モーダルの開閉・生成ロジック
-    function openNewBookModal() {
-      document.getElementById('new-book-modal').classList.remove('hidden');
+    // --- 1. メモをHTML内に埋め込み ＆ 保存 ---
+    function saveNoteAndEmbed() {
+      const excerpt = document.getElementById('excerpt-input').value.trim();
+      const comment = document.getElementById('comment-input').value.trim();
+      const chapter = document.getElementById('chapter-input').value.trim();
+      const tagsStr = document.getElementById('tags-input').value.trim();
+
+      if (!excerpt && !comment) {
+        alert('「抜書き」または「コメント」を入力してください。');
+        return;
+      }
+
+      const noteId = 'note-' + Date.now();
+      const iframe = document.getElementById('html-viewer');
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+
+      // 埋め込みメモHTML要素を作成
+      const card = iframeDoc.createElement('div');
+      card.className = 'embedded-note-card';
+      card.id = noteId;
+      card.setAttribute('data-chapter', chapter);
+      card.setAttribute('data-tags', tagsStr);
+
+      const tagsFormatted = tagsStr ? tagsStr.split(',').map(t => `#${t.trim()}`).join(' ') : '';
+
+      card.innerHTML = `
+        <div class="note-header">
+          📌 読書メモ ${chapter ? `[${escapeHtml(chapter)}]` : ''} - ${new Date().toLocaleDateString('ja-JP')} ${tagsFormatted}
+        </div>
+        ${excerpt ? `<blockquote>"${escapeHtml(excerpt)}"`</blockquote>` : ''}
+        ${comment ? `<p class="note-comment">💡 ${escapeHtml(comment)}</p>` : ''}
+      `;
+
+      // 挿入箇所の特定（指定の章の後ろ、または本文末尾）
+      let inserted = false;
+      if (chapter) {
+        const headings = Array.from(iframeDoc.querySelectorAll('h1, h2, h3, h4'));
+        const targetH = headings.find(h => h.textContent.includes(chapter));
+        if (targetH && targetH.nextElementSibling) {
+          targetH.parentNode.insertBefore(card, targetH.nextElementSibling);
+          inserted = true;
+        }
+      }
+
+      if (!inserted) {
+        iframeDoc.body.appendChild(card);
+      }
+
+      // フォーム初期化 & 右側一覧更新
+      document.getElementById('excerpt-input').value = '';
+      document.getElementById('comment-input').value = '';
+      
+      syncNotesFromHTML(iframeDoc);
+
+      // 追加したメモの位置へ自動スクロール
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
-    function closeNewBookModal() {
-      document.getElementById('new-book-modal').classList.add('hidden');
+    // --- HTMLから埋め込まれたメモカードを同期・一覧表示 ---
+    function syncNotesFromHTML(iframeDoc) {
+      const cards = iframeDoc.querySelectorAll('.embedded-note-card');
+      currentNotes = [];
+
+      cards.forEach(card => {
+        const bq = card.querySelector('blockquote');
+        const cm = card.querySelector('.note-comment');
+        
+        currentNotes.push({
+          id: card.id,
+          excerpt: bq ? bq.textContent.replace(/^"|"$/g, '') : '',
+          comment: cm ? cm.textContent.replace(/^💡\s*/, '') : '',
+          chapter: card.getAttribute('data-chapter') || '',
+          tags: card.getAttribute('data-tags') || ''
+        });
+      });
+
+      renderNotesList();
     }
+
+    function renderNotesList() {
+      const container = document.getElementById('notes-list');
+      document.getElementById('notes-count').textContent = currentNotes.length;
+
+      if (currentNotes.length === 0) {
+        container.innerHTML = `<div class="text-center py-8 text-slate-400 text-xs bg-white rounded-lg border border-dashed border-slate-300">まだメモが埋め込まれていません。</div>`;
+        return;
+      }
+
+      container.innerHTML = currentNotes.map((note, idx) => `
+        <div onclick="scrollToNote('${note.id}')" class="bg-white rounded-lg p-3.5 border border-slate-200 shadow-sm space-y-2 cursor-pointer hover:border-indigo-300 transition relative group">
+          <div class="flex justify-between items-center text-xs text-slate-400">
+            <span class="font-semibold text-indigo-600">#${currentNotes.length - idx} ${escapeHtml(note.chapter || '章指定なし')}</span>
+            <span class="text-slate-400 hover:text-indigo-600"><i class="fa-solid fa-location-crosshairs mr-1"></i>本文へジャンプ</span>
+          </div>
+
+          ${note.excerpt ? `<blockquote class="bg-amber-50 border-l-2 border-amber-400 p-2 rounded text-xs text-slate-700 italic">"${escapeHtml(note.excerpt)}"</blockquote>` : ''}
+          ${note.comment ? `<p class="text-xs text-slate-800 font-medium">💡 ${escapeHtml(note.comment)}</p>` : ''}
+
+          <button onclick="deleteNoteFromHTML(event, '${note.id}')" class="absolute top-2 right-2 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition text-xs p-1">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </div>
+      `).join('');
+    }
+
+    // --- 本文中のメモ位置へジャンプ ---
+    function scrollToNote(noteId) {
+      const iframe = document.getElementById('html-viewer');
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+      const target = iframeDoc.getElementById(noteId);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // ハイライトアニメーション
+        target.style.transition = 'background-color 0.3s';
+        const originalBg = target.style.backgroundColor;
+        target.style.backgroundColor = '#fef08a';
+        setTimeout(() => { target.style.backgroundColor = originalBg; }, 1200);
+      }
+    }
+
+    // --- メモの削除 ---
+    function deleteNoteFromHTML(event, noteId) {
+      event.stopPropagation();
+      if (!confirm('このメモをHTML本文から削除しますか？')) return;
+
+      const iframe = document.getElementById('html-viewer');
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+      const target = iframeDoc.getElementById(noteId);
+      if (target) {
+        target.remove();
+        syncNotesFromHTML(iframeDoc);
+      }
+    }
+
+    function clearAllNotes() {
+      if (!confirm('HTML内のすべてのメモカードを削除しますか？')) return;
+      const iframe = document.getElementById('html-viewer');
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+      iframeDoc.querySelectorAll('.embedded-note-card').forEach(el => el.remove());
+      syncNotesFromHTML(iframeDoc);
+    }
+
+    // --- 2. メモが反映されたHTMLを保存・ダウンロード ---
+    function downloadUpdatedHTML() {
+      const iframe = document.getElementById('html-viewer');
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+      
+      const fullHTML = '<!DOCTYPE html>\n' + iframeDoc.documentElement.outerHTML;
+      const fileName = document.getElementById('current-filename').textContent.replace(/（.*）/, '') || 'reading_book.html';
+
+      const blob = new Blob([fullHTML], { type: 'text/html;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = fileName.endsWith('.html') ? fileName : `${fileName}.html`;
+      a.click();
+    }
+
+    // --- 3. Markdown エクスポート ---
+    function exportNotesMarkdown() {
+      if (currentNotes.length === 0) return alert('出力するメモがありません。');
+      let md = `# 読書メモ・抜書きエクスポート\n\n`;
+      currentNotes.forEach((note, index) => {
+        md += `### メモ #${currentNotes.length - index} ${note.chapter ? `(${note.chapter})` : ''}\n`;
+        if (note.excerpt) md += `> ${note.excerpt.replace(/\n/g, '\n> ')}\n\n`;
+        if (note.comment) md += `**コメント:**\n${note.comment}\n\n---\n\n`;
+      });
+
+      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `notes_${new Date().toISOString().slice(0, 10)}.md`;
+      a.click();
+    }
+
+    // --- 新規本作成モーダル関連 ---
+    function openNewBookModal() { document.getElementById('new-book-modal').classList.remove('hidden'); }
+    function closeNewBookModal() { document.getElementById('new-book-modal').classList.add('hidden'); }
 
     function createNewBookHTML() {
       const title = document.getElementById('new-book-title').value.trim();
       const author = document.getElementById('new-book-author').value.trim();
       const chaptersText = document.getElementById('new-book-chapters').value.trim();
 
-      if (!title) {
-        alert('書籍タイトルを入力してください。');
-        return;
-      }
+      if (!title) return alert('書籍タイトルを入力してください。');
 
-      const chapterList = chaptersText
-        ? chaptersText.split('\n').filter(line => line.trim() !== '')
-        : ['第1章'];
-
+      const chapterList = chaptersText ? chaptersText.split('\n').filter(l => l.trim() !== '') : ['第1章'];
       let chaptersHtml = '';
       chapterList.forEach(ch => {
-        chaptersHtml += `
-        <h2>${escapeHtml(ch)}</h2>
-        <p>（ここに「${escapeHtml(ch)}」の本文やメモを入力・貼り付けしてください）</p>`;
+        chaptersHtml += `<h2>${escapeHtml(ch)}</h2>\n<p>（ここに「${escapeHtml(ch)}」の本文やメモを入力・貼り付けしてください）</p>\n`;
       });
 
       const generatedHTML = `<!DOCTYPE html>
@@ -373,6 +454,19 @@
     .author { font-size: 0.9rem; color: #64748b; margin-top: -8px; margin-bottom: 24px; }
     h2 { color: #1e293b; margin-top: 32px; font-size: 1.2rem; border-left: 4px solid #6366f1; padding-left: 8px; }
     p { margin-bottom: 16px; text-align: justify; }
+    .embedded-note-card {
+      background-color: #fefce8;
+      border: 1px solid #fef08a;
+      border-left: 5px solid #eab308;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 20px 0;
+      font-size: 0.9rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .embedded-note-card .note-header { font-size: 0.75rem; color: #854d0e; font-weight: bold; margin-bottom: 6px; }
+    .embedded-note-card blockquote { margin: 0 0 8px 0; padding-left: 10px; border-left: 2px solid #fde047; font-style: italic; color: #451a03; }
+    .embedded-note-card .note-comment { color: #1e293b; margin: 0; font-weight: 500; }
   </style>
 </head>
 <body>
@@ -382,108 +476,12 @@
 </body>
 </html>`;
 
-      const fileName = `${title}.html`;
-
-      // 1. iframeへロード
-      document.getElementById('current-filename').textContent = fileName;
+      document.getElementById('current-filename').textContent = `${title}.html`;
       setIframeContent(generatedHTML);
-
-      // 2. ローカルファイルとして自動ダウンロード保存
-      const blob = new Blob([generatedHTML], { type: 'text/html;charset=utf-8;' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = fileName;
-      a.click();
-
       closeNewBookModal();
-      alert(`「${title}」のHTMLを作成・ダウンロードしました！\nGoogle Drive等にアップロードして読み込むことも可能です。`);
-    }
-
-    function saveNote() {
-      const excerpt = document.getElementById('excerpt-input').value.trim();
-      const comment = document.getElementById('comment-input').value.trim();
-      const chapter = document.getElementById('chapter-input').value.trim();
-      const tagsStr = document.getElementById('tags-input').value.trim();
-
-      if (!excerpt && !comment) {
-        alert('「抜書き」または「コメント」を入力してください。');
-        return;
-      }
-
-      const note = {
-        id: Date.now(),
-        excerpt, comment, chapter,
-        tags: tagsStr ? tagsStr.split(',').map(t => t.trim()) : [],
-        filename: document.getElementById('current-filename').textContent,
-        createdAt: new Date().toLocaleString('ja-JP')
-      };
-
-      currentNotes.unshift(note);
-      localStorage.setItem('reading_notes', JSON.stringify(currentNotes));
-
-      document.getElementById('excerpt-input').value = '';
-      document.getElementById('comment-input').value = '';
-      renderNotes();
-    }
-
-    function renderNotes() {
-      const container = document.getElementById('notes-list');
-      document.getElementById('notes-count').textContent = currentNotes.length;
-
-      if (currentNotes.length === 0) {
-        container.innerHTML = `<div class="text-center py-8 text-slate-400 text-xs bg-white rounded-lg border border-dashed border-slate-300">まだ保存されたメモはありません。</div>`;
-        return;
-      }
-
-      container.innerHTML = currentNotes.map(note => `
-        <div class="bg-white rounded-lg p-4 border border-slate-200 shadow-sm space-y-2 relative group">
-          <div class="flex justify-between text-xs text-slate-400 mb-1">
-            <span class="font-medium text-slate-600">${escapeHtml(note.chapter || '章指定なし')}</span>
-            <span>${note.createdAt}</span>
-          </div>
-
-          ${note.excerpt ? `<blockquote class="bg-amber-50/60 border-l-3 border-amber-400 p-2.5 rounded text-xs text-slate-700 italic">"${escapeHtml(note.excerpt)}"</blockquote>` : ''}
-          ${note.comment ? `<p class="text-xs text-slate-800 pt-1">${escapeHtml(note.comment)}</p>` : ''}
-
-          <button onclick="deleteNote(${note.id})" class="absolute top-2 right-2 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition text-xs p-1"><i class="fa-solid fa-trash"></i></button>
-        </div>
-      `).join('');
-    }
-
-    function deleteNote(id) {
-      if (confirm('メモを削除しますか？')) {
-        currentNotes = currentNotes.filter(n => n.id !== id);
-        localStorage.setItem('reading_notes', JSON.stringify(currentNotes));
-        renderNotes();
-      }
-    }
-
-    function clearAllNotes() {
-      if (confirm('すべてのメモを削除しますか？')) {
-        currentNotes = [];
-        localStorage.removeItem('reading_notes');
-        renderNotes();
-      }
     }
 
     function clearExcerpt() { document.getElementById('excerpt-input').value = ''; }
-
-    function exportNotesMarkdown() {
-      if (currentNotes.length === 0) return alert('出力するメモがありません。');
-      let md = `# 読書メモ エクスポート\n\n`;
-      currentNotes.forEach((note, index) => {
-        md += `### メモ #${currentNotes.length - index} ${note.chapter ? `(${note.chapter})` : ''}\n`;
-        if (note.excerpt) md += `> ${note.excerpt.replace(/\n/g, '\n> ')}\n\n`;
-        if (note.comment) md += `**コメント:**\n${note.comment}\n\n---\n\n`;
-      });
-
-      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8;' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `reading_notes_${new Date().toISOString().slice(0, 10)}.md`;
-      a.click();
-    }
-
     function escapeHtml(str) {
       return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
     }
